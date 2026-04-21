@@ -1,0 +1,46 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  color: #1a1a1a;
+  background: #f9f9f9;
+}
+
+header { margin-bottom: 2rem; }
+header h1 { margin: 0; font-size: 2rem; }
+header p  { margin: .25rem 0 0; color: #666; }
+
+h2 { font-size: 1.1rem; margin-bottom: .75rem; }
+
+section { background: #fff; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+form { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+input[type="text"],
+input[type="file"] {
+  flex: 1;
+  padding: .5rem .75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+button {
+  padding: .5rem 1.25rem;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+button:hover { background: #1d4ed8; }
+
+ul { list-style: none; padding: 0; margin: 0; }
+li { padding: .5rem 0; border-bottom: 1px solid #f0f0f0; }
+li:last-child { border-bottom: none; }
+
+#answer { margin-top: 1rem; white-space: pre-wrap; }

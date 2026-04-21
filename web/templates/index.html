@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DocuMind</title>
+  <script src="/static/htmx.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>DocuMind</h1>
+    <p>Your personal document AI agent</p>
+  </header>
+
+  <main>
+    <section id="upload">
+      <h2>Upload Document</h2>
+      <form hx-post="/documents"
+            hx-target="#document-list"
+            hx-swap="beforeend"
+            hx-encoding="multipart/form-data">
+        <input type="file" name="file" accept=".txt,.pdf,.md" required />
+        <button type="submit">Upload</button>
+      </form>
+    </section>
+
+    <section id="documents">
+      <h2>Documents</h2>
+      <ul id="document-list"
+          hx-get="/documents"
+          hx-trigger="load"
+          hx-swap="innerHTML">
+      </ul>
+    </section>
+
+    <section id="query">
+      <h2>Ask a Question</h2>
+      <form hx-post="/query"
+            hx-target="#answer"
+            hx-swap="innerHTML">
+        <input type="text" name="q" placeholder="Ask anything about your documents..." required />
+        <button type="submit">Ask</button>
+      </form>
+      <div id="answer"></div>
+    </section>
+  </main>
+</body>
+</html>

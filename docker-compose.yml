@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ADDR=:8080
+    volumes:
+      - ./web:/app/web  # live reload templates in dev
+    restart: unless-stopped
