@@ -1,25 +1,42 @@
-# Test Rules
+---
+paths: ["**/*_test.go"]
+---
+
+# Go Test Conventions
 
 ## Structure
-- Test files live alongside source: `foo.go` → `foo_test.go`
-- Use `package foo_test` (black-box) by default; `package foo` only when testing unexported internals
-- Group related cases with `t.Run("scenario name", ...)` subtests
+
+Use table-driven tests:
+
+    func TestThing(t *testing.T) {
+        tests := []struct {
+            name    string
+            input   string
+            want    string
+            wantErr bool
+        }{
+            {name: "happy path", input: "foo", want: "FOO"},
+            {name: "empty input", input: "", wantErr: true},
+        }
+        for _, tt := range tests {
+            t.Run(tt.name, func(t *testing.T) {
+                got, err := Thing(tt.input)
+                if (err != nil) != tt.wantErr {
+                    t.Fatalf("err = %v, wantErr = %v", err, tt.wantErr)
+                }
+                if got != tt.want {
+                    t.Errorf("got %q, want %q", got, tt.want)
+                }
+            })
+        }
+    }
+
+## Naming
+
+- Unit test file: `foo_test.go`
+- Integration test file: `foo_integration_test.go` with `//go:build integration` at top
+- Test function: `TestFoo_Scenario` for specific scenarios, `TestFoo` for the main case
 
 ## Assertions
-- Use `testify/assert` and `testify/require`; `require` for fatal preconditions
-- One logical assertion per subtest when possible
-- Include meaningful failure messages: `assert.Equal(t, want, got, "after processing doc %s", docID)`
 
-## Mocking & fakes
-- Do NOT mock the database or storage layer — use real implementations against test data
-- Use interfaces to inject fakes for external services (Claude API, file system)
-- Fakes live in `internal/<pkg>/testdata/` or a `fake_*.go` file in the same package
-
-## Test data
-- Static fixtures go in `testdata/` directories (e.g., sample PDFs, JSON responses)
-- Never commit real documents or PII as test fixtures
-
-## Coverage
-- Every exported function needs at least one test
-- Error paths must be tested, not just happy paths
-- Table-driven tests preferred for functions with multiple input/output variants
+No third-party assertion libraries (`testify`, etc). Use standard library: `t.Errorf`, `t.Fatalf`.

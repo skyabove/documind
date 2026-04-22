@@ -1,26 +1,34 @@
-# Go API Rules
+---
+paths: ["internal/api/**/*.go", "cmd/server/**/*.go"]
+---
 
-## General
-- Use `errors.New` / `fmt.Errorf` with `%w` for error wrapping; never discard errors
-- Prefer explicit returns over named return variables except for defer-based cleanup
-- Keep functions focused: one responsibility, fits in a screen
-- Use `context.Context` as the first parameter in all I/O functions
+# Go API Handler Conventions
 
-## Naming
-- Exported types/functions use PascalCase; unexported use camelCase
-- Interfaces end in `-er` (e.g., `DocumentStore`, `Extractor`)
-- Avoid stuttering: `documents.Store`, not `documents.DocumentStore`
+## Handler Signature
 
-## Packages
-- `internal/` packages are not importable outside the module — use freely for isolation
-- No circular imports; dependency direction: `api → documents/extraction/claude`
-- Keep `main.go` thin: wire dependencies, start server, handle signals
+All HTTP handlers follow this pattern:
 
-## Error handling
-- Return errors up the call stack; log only at the top (handler level)
-- Wrap with context: `fmt.Errorf("extracting text from %s: %w", name, err)`
-- Define sentinel errors with `errors.New` for ones callers need to check
+    func (s *Server) handleSomething(w http.ResponseWriter, r *http.Request) {
+        ctx := r.Context()
+        // ...
+    }
 
-## Structs & interfaces
-- Define interfaces where they are *used*, not where they are *implemented*
-- Use struct embedding sparingly; prefer explicit field promotion
+Never use the package-level `http.HandleFunc` — always methods on `*Server`.
+
+## Request Parsing
+
+- Decode JSON into typed request structs, never `map[string]interface{}`
+- Validate input **before** calling business logic
+- Use `http.MaxBytesReader` for any endpoint that accepts a body
+
+## Response Formatting
+
+- Success: `writeJSON(w, http.StatusOK, response)`
+- Client errors: `writeError(w, http.StatusBadRequest, "human-readable message")`
+- Server errors: `writeError(w, http.StatusInternalServerError, "internal error")` + log actual error
+
+Never expose internal error messages to the client.
+
+## Context Propagation
+
+Always pass `r.Context()` to downstream calls. Never create `context.Background()` inside a handler — that breaks cancellation on client disconnect.
