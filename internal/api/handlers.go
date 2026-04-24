@@ -173,3 +173,42 @@ func (s *Server) handleAnalyzeDocument(w http.ResponseWriter, r *http.Request) {
 		OutputTokens: result.TotalUsage.OutputTokens,
 	})
 }
+
+func (s *Server) handleExtractDocument(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	docID := chi.URLParam(r, "id")
+	if docID == "" {
+		writeError(w, http.StatusBadRequest, "missing document id")
+		return
+	}
+
+	path := filepath.Join(s.cfg.StoragePath, docID+".pdf")
+	pdfBytes, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeError(w, http.StatusNotFound, "document not found")
+			return
+		}
+		slog.ErrorContext(ctx, "read pdf", "error", err, "path", path)
+		writeError(w, http.StatusInternalServerError, "storage error")
+		return
+	}
+
+	result, err := s.extractor.Extract(ctx, docID, pdfBytes)
+	if err != nil {
+		slog.ErrorContext(ctx, "extract", "error", err, "document_id", docID)
+		writeError(w, http.StatusBadGateway, "extraction failed")
+		return
+	}
+
+	slog.InfoContext(ctx, "extraction complete",
+		"document_id", docID,
+		"iterations", result.Iterations,
+		"input_tokens", result.Usage.InputTokens,
+		"output_tokens", result.Usage.OutputTokens,
+		"summary_extracted", result.Summary != nil,
+		"entity_count", len(result.Entities),
+	)
+
+	writeJSON(w, http.StatusOK, result)
+}
