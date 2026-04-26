@@ -45,6 +45,10 @@ func (e *Extractor) Extract(ctx context.Context, documentID string, pdfBytes []b
 		return nil, fmt.Errorf("register tools: %w", err)
 	}
 
+	// Set up post-tool-use hooks (Task Statement 1.5).
+	hooks := claude.NewHookRegistry()
+	hooks.AddPostToolUse("extract_key_entities", MoneyNormalizer(store))
+
 	pdfB64 := base64.StdEncoding.EncodeToString(pdfBytes)
 	initial := []claude.ContentBlock{
 		{
@@ -65,6 +69,7 @@ func (e *Extractor) Extract(ctx context.Context, documentID string, pdfBytes []b
 		System:         systemPrompt,
 		InitialContent: initial,
 		Tools:          registry,
+		Hooks:          hooks, // ← NEW
 		MaxIterations:  6,
 		MaxTokens:      2048,
 	})

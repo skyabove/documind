@@ -18,6 +18,19 @@ type Entity struct {
 	Value      string `json:"value"`             // the literal text as it appears
 	Confidence string `json:"confidence"`        // high, medium, low
 	Context    string `json:"context,omitempty"` // brief surrounding context, if useful
+
+	// Normalized is added by post-extraction hooks for entities that
+	// benefit from canonical representation alongside their literal form.
+	// Currently populated for type="money".
+	Normalized *NormalizedValue `json:"normalized,omitempty"`
+}
+
+// NormalizedValue is a structured, canonical representation of an entity value.
+// The shape varies by entity type — for money, we emit Amount + Currency.
+// Other entity types may extend this struct with additional fields in the future.
+type NormalizedValue struct {
+	Amount   *float64 `json:"amount,omitempty"`
+	Currency string   `json:"currency,omitempty"`
 }
 
 // EntityList is the structured output of the extract_key_entities tool.

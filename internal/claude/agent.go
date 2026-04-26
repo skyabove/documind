@@ -8,22 +8,12 @@ import (
 
 // RunAgentOptions configures a single agentic loop execution.
 type RunAgentOptions struct {
-	// System prompt prepended to the conversation.
-	System string
-
-	// Initial user message content (text, documents, etc).
+	System         string
 	InitialContent []ContentBlock
-
-	// Tool registry available to the agent.
-	Tools *ToolRegistry
-
-	// MaxIterations is a safety cap, NOT the primary termination mechanism.
-	// Termination is driven by stop_reason == "end_turn".
-	// If the loop hits this cap, something is wrong (infinite tool calls).
-	MaxIterations int
-
-	// MaxTokens per API call.
-	MaxTokens int
+	Tools          *ToolRegistry
+	Hooks          *HookRegistry // ← NEW: optional, may be nil
+	MaxIterations  int
+	MaxTokens      int
 }
 
 // AgentResult is the final state after the agentic loop completes.
@@ -48,9 +38,11 @@ type AgentResult struct {
 //  1. Send messages to Claude
 //  2. Inspect stop_reason
 //  3. If "end_turn" → return result
-//  4. If "tool_use" → execute all requested tools, append results, loop
+//  4. If "tool_use" → execute all requested tools, run hooks,
+//     append results, loop
 //
-// This is the exam-critical pattern from Task Statement 1.1.
+// This is the exam-critical pattern from Task Statement 1.1, extended
+// with PostToolUse hooks (Task Statement 1.5).
 func (c *Client) RunAgent(ctx context.Context, opts RunAgentOptions) (*AgentResult, error) {
 	if opts.MaxIterations == 0 {
 		opts.MaxIterations = 10
@@ -92,13 +84,11 @@ func (c *Client) RunAgent(ctx context.Context, opts RunAgentOptions) (*AgentResu
 		result.TotalUsage.OutputTokens += resp.Usage.OutputTokens
 		result.StopReason = resp.StopReason
 
-		// Append the assistant's response to history.
 		messages = append(messages, Message{
 			Role:    RoleAssistant,
 			Content: resp.Content,
 		})
 
-		// Termination: exam-critical branch.
 		if resp.StopReason == StopReasonEndTurn {
 			result.FinalMessages = messages
 			result.FinalText = extractText(resp.Content)
@@ -110,7 +100,6 @@ func (c *Client) RunAgent(ctx context.Context, opts RunAgentOptions) (*AgentResu
 			return result, nil
 		}
 
-		// Only other case we handle: the model wants to call tools.
 		if resp.StopReason != StopReasonToolUse {
 			return nil, fmt.Errorf("unexpected stop_reason: %s", resp.StopReason)
 		}
@@ -119,7 +108,6 @@ func (c *Client) RunAgent(ctx context.Context, opts RunAgentOptions) (*AgentResu
 			return nil, fmt.Errorf("model requested tool use but no tools were registered")
 		}
 
-		// Execute all tool calls in the response, collect tool_result blocks.
 		toolResults := make([]ContentBlock, 0)
 		for _, block := range resp.Content {
 			if block.Type != ContentTypeToolUse {
@@ -130,6 +118,27 @@ func (c *Client) RunAgent(ctx context.Context, opts RunAgentOptions) (*AgentResu
 				"id", block.ID,
 			)
 			output, isErr := opts.Tools.Execute(ctx, block.Name, block.Input)
+
+			// Run post-tool-use hooks (Task Statement 1.5).
+			if opts.Hooks != nil {
+				hookErr := opts.Hooks.runPostToolUse(ctx, ToolCall{
+					Name:    block.Name,
+					Input:   block.Input,
+					Output:  output,
+					IsError: isErr,
+				})
+				if hookErr != nil {
+					slog.ErrorContext(ctx, "post-tool-use hook failed",
+						"tool", block.Name,
+						"error", hookErr,
+					)
+					// Hook errors don't fail the agent — they're logged
+					// and execution continues. This is a design choice:
+					// hooks are infrastructure, not business logic.
+					// If a hook MUST block, it should mutate output instead.
+				}
+			}
+
 			toolResults = append(toolResults, ContentBlock{
 				Type:      ContentTypeToolResult,
 				ToolUseID: block.ID,
@@ -138,7 +147,6 @@ func (c *Client) RunAgent(ctx context.Context, opts RunAgentOptions) (*AgentResu
 			})
 		}
 
-		// Append tool results as a new user message for the next iteration.
 		messages = append(messages, Message{
 			Role:    RoleUser,
 			Content: toolResults,
