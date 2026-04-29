@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	"github.com/skyabove/documind/internal/agents"
 	"github.com/skyabove/documind/internal/claude"
 )
 
@@ -18,37 +19,48 @@ func NewExtractor(client *claude.Client) *Extractor {
 	return &Extractor{client: client}
 }
 
-// systemPrompt defines the extraction behavior. Notes (Task Statement 4.1):
-//   - Explicit instructions about tool-calling order
-//   - Explicit instructions about avoiding fabrication
-//   - Clear termination criterion (both tools called → end_turn)
-const systemPrompt = `You are a document extraction system. Your job is to read the provided document and record structured data using the available tools.
+const systemPrompt = `You are a document extraction coordinator. Your job is to read the provided document and record structured data using the available tools.
 
 Required workflow:
-1. First, call extract_document_summary ONCE to record the document overview.
-2. Then, call extract_key_entities ONCE with ALL entities from the document.
-3. After both tools have been called, respond with a brief confirmation and stop.
+1. First, call the Task tool to invoke the "document_inspector" subagent. Pass it the document context: "Inspect the document I am about to send. Report its structure." (The PDF will be available to the subagent as well — coordinator and subagent both see the document if you reference it.)
+2. After the inspector returns, call extract_document_summary ONCE to record the document overview.
+3. Then, call extract_key_entities ONCE with ALL entities from the document.
+4. After all three calls have completed, respond with a brief confirmation and stop.
 
 Critical rules:
 - Only extract information that is explicitly present in the document. Never fabricate.
-- If a field's information is genuinely absent, use an empty list or omit optional fields. Do not invent placeholders.
-- For money entities, include the currency symbol or code as it appears (e.g., "$1,250.00", "€500", "USD 15000").
-- For dates, preserve the original format from the document. Do not normalize.
-- Do not call the same tool twice. If you have already called a tool, use its confirmation as a signal to proceed.`
+- For money entities, include the currency symbol or code as it appears.
+- For dates, preserve the original format from the document.
+- Do not call the same tool twice.`
 
 // Extract runs the agentic extraction pipeline on a PDF.
-// Returns a populated ExtractionResult or an error.
 func (e *Extractor) Extract(ctx context.Context, documentID string, pdfBytes []byte) (*ExtractionResult, error) {
-	registry := claude.NewToolRegistry()
+	// --- Tool registry for the COORDINATOR (top-level agent) ---
+	coordinatorTools := claude.NewToolRegistry()
 	store := &Store{}
-	if err := RegisterTools(registry, store); err != nil {
-		return nil, fmt.Errorf("register tools: %w", err)
+	if err := RegisterTools(coordinatorTools, store); err != nil {
+		return nil, fmt.Errorf("register extraction tools: %w", err)
 	}
 
-	// Set up post-tool-use hooks (Task Statement 1.5).
+	// --- Agent registry for subagents ---
+	agentReg := claude.NewAgentRegistry()
+	if err := agentReg.Register(agents.DocumentInspector()); err != nil {
+		return nil, fmt.Errorf("register inspector: %w", err)
+	}
+
+	// --- Shared tools available to subagents (currently empty — inspector has no tools) ---
+	sharedTools := claude.NewToolRegistry()
+
+	// --- Wire Task tool into coordinator's registry ---
+	if err := claude.RegisterTaskTool(e.client, coordinatorTools, agentReg, sharedTools); err != nil {
+		return nil, fmt.Errorf("register Task tool: %w", err)
+	}
+
+	// --- Hooks ---
 	hooks := claude.NewHookRegistry()
 	hooks.AddPostToolUse("extract_key_entities", MoneyNormalizer(store))
 
+	// --- Initial content for coordinator ---
 	pdfB64 := base64.StdEncoding.EncodeToString(pdfBytes)
 	initial := []claude.ContentBlock{
 		{
@@ -61,16 +73,16 @@ func (e *Extractor) Extract(ctx context.Context, documentID string, pdfBytes []b
 		},
 		{
 			Type: claude.ContentTypeText,
-			Text: "Extract structured data from this document using the available tools, following the required workflow.",
+			Text: "Extract structured data from this document using the available tools, following the required workflow. Start by inspecting the document with the document_inspector subagent.",
 		},
 	}
 
 	result, err := e.client.RunAgent(ctx, claude.RunAgentOptions{
 		System:         systemPrompt,
 		InitialContent: initial,
-		Tools:          registry,
-		Hooks:          hooks, // ← NEW
-		MaxIterations:  6,
+		Tools:          coordinatorTools,
+		Hooks:          hooks,
+		MaxIterations:  10, // raised — coordinator now has more steps
 		MaxTokens:      2048,
 	})
 	if err != nil {
