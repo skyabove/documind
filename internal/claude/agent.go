@@ -8,12 +8,13 @@ import (
 
 // RunAgentOptions configures a single agentic loop execution.
 type RunAgentOptions struct {
-	System         string
-	InitialContent []ContentBlock
-	Tools          *ToolRegistry
-	Hooks          *HookRegistry // ← NEW: optional, may be nil
-	MaxIterations  int
-	MaxTokens      int
+	System            string
+	InitialContent    []ContentBlock
+	Tools             *ToolRegistry
+	Hooks             *HookRegistry // optional, may be nil
+	InitialToolChoice *ToolChoice   // optional, applies only to the first API call
+	MaxIterations     int
+	MaxTokens         int
 }
 
 // AgentResult is the final state after the agentic loop completes.
@@ -68,6 +69,9 @@ func (c *Client) RunAgent(ctx context.Context, opts RunAgentOptions) (*AgentResu
 		}
 		if opts.Tools != nil {
 			req.Tools = opts.Tools.Definitions()
+		}
+		if iter == 0 && opts.InitialToolChoice != nil {
+			req.ToolChoice = opts.InitialToolChoice
 		}
 
 		slog.InfoContext(ctx, "agent iteration",

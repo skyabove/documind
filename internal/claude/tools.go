@@ -64,7 +64,9 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, input json.RawM
 }
 
 // lookup returns the tool definition and handler for a given name.
-// Used internally by Task to wire subagent tool registries.
+// Used internally by Task to wire subagent tool registries from a shared pool.
+//
+// Returns ok=false if the tool is not registered.
 func (r *ToolRegistry) lookup(name string) (Tool, ToolHandler, bool) {
 	def, defOk := r.defs[name]
 	handler, handlerOk := r.handlers[name]

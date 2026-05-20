@@ -78,13 +78,22 @@ type Tool struct {
 	InputSchema json.RawMessage `json:"input_schema"`
 }
 
+// ToolChoice controls whether Claude may, must, or must not use tools.
+// Type values supported by the Messages API include "auto", "any",
+// "tool", and "none". Name is required when Type is "tool".
+type ToolChoice struct {
+	Type string `json:"type"`
+	Name string `json:"name,omitempty"`
+}
+
 // MessagesRequest is the payload for POST /v1/messages.
 type MessagesRequest struct {
-	Model     string    `json:"model"`
-	MaxTokens int       `json:"max_tokens"`
-	System    string    `json:"system,omitempty"`
-	Messages  []Message `json:"messages"`
-	Tools     []Tool    `json:"tools,omitempty"`
+	Model      string      `json:"model"`
+	MaxTokens  int         `json:"max_tokens"`
+	System     string      `json:"system,omitempty"`
+	Messages   []Message   `json:"messages"`
+	Tools      []Tool      `json:"tools,omitempty"`
+	ToolChoice *ToolChoice `json:"tool_choice,omitempty"`
 }
 
 // MessagesResponse is the response payload from POST /v1/messages.
