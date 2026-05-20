@@ -6,7 +6,7 @@ package extraction
 // Summary is the structured output of the extract_document_summary tool.
 type Summary struct {
 	Title           string   `json:"title"`
-	DocumentType    string   `json:"document_type"` // invoice, contract, article, report, other
+	DocumentType    string   `json:"document_type"` // invoice, contract, article, report, receipt, bank_transfer_receipt, payment_confirmation, bank_statement, legal_document, other
 	MainTopics      []string `json:"main_topics"`
 	KeyFindings     []string `json:"key_findings"`
 	OneLineAbstract string   `json:"one_line_abstract"`
@@ -14,10 +14,11 @@ type Summary struct {
 
 // Entity is a single entity extracted from the document.
 type Entity struct {
-	Type       string `json:"type"`              // person, organization, location, money, date, product, other
-	Value      string `json:"value"`             // the literal text as it appears
-	Confidence string `json:"confidence"`        // high, medium, low
-	Context    string `json:"context,omitempty"` // brief surrounding context, if useful
+	Type       string `json:"type"`                // person, organization, location, money, date, product, identifier, phone, other
+	Value      string `json:"value"`               // the literal text as it appears
+	Confidence string `json:"confidence"`          // high, medium, low
+	Context    string `json:"context,omitempty"`   // brief surrounding context, if useful
+	Relevance  string `json:"relevance,omitempty"` // primary, supporting, boilerplate
 
 	// Normalized is added by post-extraction hooks for entities that
 	// benefit from canonical representation alongside their literal form.

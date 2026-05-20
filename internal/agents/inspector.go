@@ -32,6 +32,8 @@ Rules:
 - Base the assessment only on DOCUMENT_CONTEXT.
 - Use "unknown" when the context is insufficient.
 - Do not extract final business values. Identify structure and extraction strategy only.
+- Prefer the most specific document_type supported by the schema. For example, classify bank transfer confirmations as bank_transfer_receipt, payment proofs as payment_confirmation, and account statements as bank_statement. Use other only when no listed type fits.
+- Include phone/phones in entity_targets only when phone numbers are important enough for downstream extraction.
 - If a field is uncertain, lower type_confidence and add a risk.
 - After the tool result is returned, respond with exactly the JSON returned by the tool and no extra prose.`,
 		AllowedTools: []string{documentInspectionToolName},

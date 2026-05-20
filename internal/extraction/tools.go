@@ -33,8 +33,8 @@ const summaryInputSchema = `{
     },
     "document_type": {
       "type": "string",
-      "enum": ["invoice", "contract", "article", "report", "receipt", "legal_document", "other"],
-      "description": "Best-fit document category. Use 'other' if none apply rather than forcing a misfit."
+      "enum": ["invoice", "contract", "article", "report", "receipt", "bank_transfer_receipt", "payment_confirmation", "bank_statement", "legal_document", "other"],
+      "description": "Best-fit document category. Use bank_transfer_receipt for bank transfer confirmations or transfer-detail receipts; payment_confirmation for proof-of-payment documents; bank_statement for account statements. Use other only if none apply."
     },
     "main_topics": {
       "type": "array",
@@ -65,8 +65,8 @@ const entitiesInputSchema = `{
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["person", "organization", "location", "money", "date", "product", "identifier", "other"],
-            "description": "Entity category. Use 'identifier' for IDs like invoice numbers, order IDs, SKUs."
+            "enum": ["person", "organization", "location", "money", "date", "product", "identifier", "phone", "other"],
+            "description": "Entity category. Use identifier for account numbers, reference numbers, tax IDs, invoice numbers, order IDs, SKUs, and document IDs. Use phone for phone numbers."
           },
           "value": {
             "type": "string",
@@ -80,6 +80,11 @@ const entitiesInputSchema = `{
           "context": {
             "type": "string",
             "description": "Optional: a 5-15 word snippet showing how the entity is mentioned. Only include when it disambiguates."
+          },
+          "relevance": {
+            "type": "string",
+            "enum": ["primary", "supporting", "boilerplate"],
+            "description": "Optional relevance signal. primary: central to the transaction or document purpose. supporting: useful but secondary. boilerplate: legal header, footer, contact, registry, or generic issuer metadata."
           }
         },
         "required": ["type", "value", "confidence"]
@@ -122,11 +127,12 @@ func RegisterTools(reg *claude.ToolRegistry, store *Store) error {
 	err = reg.Register(
 		claude.Tool{
 			Name: "extract_key_entities",
-			Description: "Extract named entities (people, organizations, locations, monetary amounts, dates, product names, identifiers) from the document. " +
+			Description: "Extract named entities (people, organizations, locations, monetary amounts, dates, product names, identifiers, phone numbers) from the document. " +
 				"Call this tool ONCE per document with ALL entities in a single call — do not call multiple times with partial lists. " +
 				"Use this when you need structured entity data. " +
 				"Do not use this for summarization — use extract_document_summary for overview content. " +
-				"Return the entity value as it literally appears in the source, without normalization.",
+				"Return the entity value as it literally appears in the source, without normalization. " +
+				"Mark footer/header/contact/legal boilerplate entities as relevance=boilerplate when included.",
 			InputSchema: json.RawMessage(entitiesInputSchema),
 		},
 		func(ctx context.Context, input json.RawMessage) (string, error) {

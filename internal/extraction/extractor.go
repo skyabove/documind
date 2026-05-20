@@ -45,6 +45,9 @@ Critical rules:
 - Only extract information that is explicitly present in the document. Never fabricate.
 - For money entities, include the currency symbol or code as it appears.
 - For dates, preserve the original format from the document.
+- Preserve specific document subtype in the summary. For example, do not reduce a bank transfer receipt/payment confirmation to a generic document if the schema gives you a more specific option.
+- Prefer semantically exact entity types. Use phone for phone numbers when the entity schema supports it; use identifier for account numbers, references, tax IDs, and document IDs.
+- Focus entity extraction on business-relevant content. Avoid extracting generic legal boilerplate, footer/contact lines, or registry locations unless they are directly relevant to the document's purpose.
 - If the inspector reports low_text_quality, scanned_pdf, ambiguous_currency, or unknown_document_type, be conservative and use unknown/null-like wording rather than guessing.
 - Do not call the same extraction tool twice.`
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/skyabove/documind/internal/claude"
 )
@@ -13,8 +14,8 @@ const documentInspectionInputSchema = `{
   "properties": {
     "document_type": {
       "type": "string",
-      "enum": ["invoice", "receipt", "contract", "report", "form", "letter", "statement", "certificate", "article", "other", "unknown"],
-      "description": "Best structural classification based only on provided document context."
+      "enum": ["invoice", "receipt", "bank_transfer_receipt", "payment_confirmation", "bank_statement", "contract", "report", "form", "letter", "statement", "certificate", "article", "other", "unknown"],
+      "description": "Best structural classification based only on provided document context. Use specific banking/payment categories when applicable; use other only when no listed type fits."
     },
     "type_confidence": {
       "type": "string",
@@ -47,7 +48,7 @@ const documentInspectionInputSchema = `{
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["money", "dates", "organizations", "people", "addresses", "document_ids", "emails", "phones", "line_items", "signatures", "unknown"]
+        "enum": ["money", "dates", "organizations", "people", "addresses", "document_ids", "emails", "phone", "phones", "line_items", "signatures", "unknown"]
       },
       "description": "Entity categories the coordinator should pay attention to."
     },
@@ -99,7 +100,10 @@ func RegisterDocumentInspectionTool(reg *claude.ToolRegistry) error {
 		if err != nil {
 			return "", fmt.Errorf("marshal document inspection: %w", err)
 		}
-		return string(out), nil
+
+		inspectionJSON := string(out)
+		slog.InfoContext(ctx, "document inspection recorded", "inspection", inspectionJSON)
+		return inspectionJSON, nil
 	}
 
 	return reg.Register(tool, handler)
