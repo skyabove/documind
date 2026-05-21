@@ -27,29 +27,40 @@ func NewExtractor(client *claude.Client) *Extractor {
 //  3. Use the inspector's structured JSON result as routing guidance
 //  4. Record summary/entities with extraction tools
 //  5. Wrap up
-const systemPrompt = `You are a document extraction coordinator. Your job is to read the attached PDF and record structured data using the available tools.
+const systemPrompt = `You are a document extraction coordinator.
+
+Your job is to read the provided PDF and record structured extraction results using the available tools.
+
+Roles:
+- document_inspector diagnoses document type, structure, text quality, locale format, and processing risks.
+- extract_document_summary records the final document overview.
+- extract_key_entities records concrete entities from the document.
+- Hooks may normalize extracted values after tool use.
 
 Required workflow:
-1. First, call the Task tool to invoke the "document_inspector" subagent.
-2. The Task prompt MUST include a DOCUMENT_CONTEXT block. The subagent cannot see the PDF or this conversation, so include concrete context copied or summarized from what you can observe in the attached PDF:
-   - document_id
-   - approximate page count if visible, otherwise unknown
-   - text_preview with exact visible snippets where possible
-   - visible structural signals such as tables, form fields, headings, totals, dates, signatures
-3. Read the inspector's returned JSON. Do not ignore it. Use recommended_extraction, entity_targets, and risks to decide what to extract and what to treat cautiously.
-4. If recommended_extraction.summary is true or the document type is uncertain, call extract_document_summary ONCE.
-5. If recommended_extraction.entities is true or entity_targets is non-empty, call extract_key_entities ONCE with all explicitly present relevant entities.
-6. After required extraction tool calls have completed, respond with a brief confirmation and stop.
+1. First, call Task with agent="document_inspector".
+2. The Task prompt MUST include a DOCUMENT_CONTEXT block. The inspector cannot see the PDF or parent conversation unless you explicitly pass context.
+3. In DOCUMENT_CONTEXT, include only diagnostic context:
+   - document_id if available
+   - approximate page count if visible
+   - visible title/header
+   - short text preview or structural description
+   - observed layout signals such as form fields, tables, masked values, locale/date/number formatting
+4. After the inspector returns JSON, use it as diagnostic guidance.
+5. Then call extract_document_summary exactly once.
+6. Then call extract_key_entities exactly once with all relevant entities.
+7. After all required tools have completed, respond with a brief confirmation and stop.
 
-Critical rules:
-- Only extract information that is explicitly present in the document. Never fabricate.
-- For money entities, include the currency symbol or code as it appears.
-- For dates, preserve the original format from the document.
-- Preserve specific document subtype in the summary. For example, do not reduce a bank transfer receipt/payment confirmation to a generic document if the schema gives you a more specific option.
-- Prefer semantically exact entity types. Use phone for phone numbers when the entity schema supports it; use identifier for account numbers, references, tax IDs, and document IDs.
-- Focus entity extraction on business-relevant content. Avoid extracting generic legal boilerplate, footer/contact lines, or registry locations unless they are directly relevant to the document's purpose.
-- If the inspector reports low_text_quality, scanned_pdf, ambiguous_currency, or unknown_document_type, be conservative and use unknown/null-like wording rather than guessing.
-- Do not call the same extraction tool twice.`
+Critical extraction rules:
+- Only extract information explicitly present in the document. Never fabricate.
+- Do not reconstruct masked account numbers, hidden digits, or redacted identifiers.
+- Preserve original money/date formats in entity values.
+- Use locale_format from inspection only to interpret formatting, not to rewrite source values.
+- Use relevance="primary" for entities central to the document's business meaning.
+- Use relevance="supporting" for useful but secondary entities.
+- Use relevance="boilerplate" for issuer registration data, footer contacts, legal addresses, and generic customer-service information.
+- Do not over-extract boilerplate. Include it only when it helps identify the issuer or document context.
+- Do not call the same tool twice.`
 
 // Extract runs the agentic extraction pipeline on a PDF.
 //
@@ -103,13 +114,15 @@ func (e *Extractor) Extract(ctx context.Context, documentID string, pdfBytes []b
 		},
 		{
 			Type: claude.ContentTypeText,
-			Text: fmt.Sprintf(`Extract structured data from this document using the available tools, following the required workflow.
+			Text: fmt.Sprintf(`Extract structured data from this document.
 
 DOCUMENT_METADATA:
 - document_id: %s
 - pdf_size_bytes: %d
 
-Start by calling Task with agent=document_inspector. In the Task prompt, include a DOCUMENT_CONTEXT block with concrete visible PDF context. Do not send only a generic instruction.`, documentID, len(pdfBytes)),
+Start by calling Task with agent=document_inspector.
+In the Task prompt, include a DOCUMENT_CONTEXT block with concrete visible document context.
+The inspector performs structural diagnosis only; it must not extract final summary or entity data.`, documentID, len(pdfBytes)),
 		},
 	}
 

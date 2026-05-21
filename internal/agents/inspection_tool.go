@@ -14,67 +14,132 @@ const documentInspectionInputSchema = `{
   "properties": {
     "document_type": {
       "type": "string",
-      "enum": ["invoice", "receipt", "bank_transfer_receipt", "payment_confirmation", "bank_statement", "contract", "report", "form", "letter", "statement", "certificate", "article", "other", "unknown"],
-      "description": "Best structural classification based only on provided document context. Use specific banking/payment categories when applicable; use other only when no listed type fits."
+      "enum": [
+        "invoice",
+        "receipt",
+        "bank_transfer_receipt",
+        "payment_confirmation",
+        "bank_statement",
+        "contract",
+        "report",
+        "form",
+        "letter",
+        "certificate",
+        "article",
+        "legal_document",
+        "other",
+        "unknown"
+      ],
+      "description": "Best structural/business category for the document. Use 'unknown' when there is not enough evidence; use 'other' only when the type is clear but not listed."
     },
     "type_confidence": {
       "type": "string",
       "enum": ["high", "medium", "low"],
-      "description": "Confidence in document_type."
+      "description": "Confidence in document_type based only on visible document evidence."
     },
     "primary_language": {
       "type": "string",
       "enum": ["en", "es", "ru", "mixed", "unknown"],
-      "description": "Primary language visible in the provided context."
+      "description": "Primary language of the visible document text."
     },
-    "has_tables": {
+    "structure": {
       "type": "string",
-      "enum": ["yes", "no", "unknown"]
+      "enum": ["plain_text", "form", "table", "mixed", "unknown"],
+      "description": "Dominant structural layout of the document."
     },
-    "has_forms": {
+    "layout_complexity": {
       "type": "string",
-      "enum": ["yes", "no", "unknown"]
+      "enum": ["low", "medium", "high", "unknown"],
+      "description": "Low for simple one-page forms/receipts; medium for multi-section layouts; high for dense tables, multiple columns, or mixed embedded structures."
     },
-    "recommended_extraction": {
-      "type": "object",
-      "properties": {
-        "summary": {"type": "boolean"},
-        "entities": {"type": "boolean"},
-        "money_normalization_expected": {"type": "boolean"}
-      },
-      "required": ["summary", "entities", "money_normalization_expected"]
+    "text_quality": {
+      "type": "string",
+      "enum": ["good", "partial", "poor", "unknown"],
+      "description": "Quality of visible/extracted text. Use poor for OCR noise, broken ordering, or missing critical fields."
     },
-    "entity_targets": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "enum": ["money", "dates", "organizations", "people", "addresses", "document_ids", "emails", "phone", "phones", "line_items", "signatures", "unknown"]
-      },
-      "description": "Entity categories the coordinator should pay attention to."
+    "approx_pages": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Approximate number of pages visible or provided."
+    },
+    "approx_text_volume": {
+      "type": "string",
+      "enum": ["short", "medium", "long", "unknown"],
+      "description": "Short: under ~1 page of text. Medium: several pages. Long: large document or many dense pages."
+    },
+    "contains_tables": {
+      "type": "boolean",
+      "description": "Whether the document visibly contains tabular data."
+    },
+    "contains_form_fields": {
+      "type": "boolean",
+      "description": "Whether the document is organized as labeled fields, key-value pairs, or a form-like layout."
+    },
+    "contains_monetary_values": {
+      "type": "boolean",
+      "description": "Whether the document contains monetary amounts, fees, totals, commissions, or balances."
+    },
+    "contains_dates": {
+      "type": "boolean",
+      "description": "Whether the document contains explicit dates."
+    },
+    "contains_identifiers": {
+      "type": "boolean",
+      "description": "Whether the document contains account numbers, reference numbers, tax IDs, invoice IDs, order IDs, document IDs, or similar identifiers."
+    },
+    "contains_parties": {
+      "type": "boolean",
+      "description": "Whether the document contains named people, organizations, senders, recipients, counterparties, issuers, or beneficiaries."
+    },
+    "contains_contact_info": {
+      "type": "boolean",
+      "description": "Whether the document contains phone numbers, email addresses, postal addresses, or contact channels."
+    },
+    "contains_masked_sensitive_data": {
+      "type": "boolean",
+      "description": "Whether any sensitive data is masked or partially redacted, such as masked account numbers or hidden ID digits."
+    },
+    "locale_format": {
+      "type": "string",
+      "enum": ["en_US", "es_ES", "ru_RU", "mixed", "unknown"],
+      "description": "Likely locale convention for numbers and dates. Example: es_ES for decimal comma and DD/MM/YYYY."
     },
     "risks": {
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["scanned_pdf", "low_text_quality", "ambiguous_currency", "multiple_documents", "conflicting_values", "unknown_document_type", "none"]
+        "enum": [
+          "scanned_pdf",
+          "low_text_quality",
+          "ambiguous_currency",
+          "ambiguous_date_format",
+          "masked_identifiers",
+          "multi_document_bundle",
+          "unknown_document_type"
+        ]
       },
-      "description": "Processing risks observed or implied by the provided context."
-    },
-    "notes": {
-      "type": "string",
-      "description": "One short operational note for the coordinator."
+      "description": "Processing risks observed from structure or content. Return an empty array when no risks are observed."
     }
   },
   "required": [
     "document_type",
     "type_confidence",
     "primary_language",
-    "has_tables",
-    "has_forms",
-    "recommended_extraction",
-    "entity_targets",
-    "risks",
-    "notes"
+    "structure",
+    "layout_complexity",
+    "text_quality",
+    "approx_pages",
+    "approx_text_volume",
+    "contains_tables",
+    "contains_form_fields",
+    "contains_monetary_values",
+    "contains_dates",
+    "contains_identifiers",
+    "contains_parties",
+    "contains_contact_info",
+    "contains_masked_sensitive_data",
+    "locale_format",
+    "risks"
   ]
 }`
 
